@@ -10,6 +10,7 @@ use App\Models\MenuItem;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class MenuItemController extends Controller
 {
@@ -59,51 +60,44 @@ class MenuItemController extends Controller
         }
     }
 
-    /**
-     * Display a listing of menu items.
-     */
     public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('view_menu');
 
-        $query = MenuItem::with('category');
+        $tenantId = $request->route('tenant');
+        $params   = $request->only(['search', 'category_id', 'is_available', 'show_deleted', 'page']);
+        $version  = Cache::get("t:{$tenantId}:mi:ver", 0);
+        $cacheKey = "t:{$tenantId}:mi:v{$version}:" . md5(serialize($params));
 
-        // Search by name
-        if ($request->has('search')) {
-            $search = $request->input('search');
-            $query->where('name', 'like', "%{$search}%");
-        }
+        $data = Cache::remember($cacheKey, 30, function () use ($request) {
+            $query = MenuItem::with('category')
+                ->select(['id', 'category_id', 'name', 'description', 'price', 'is_available', 'created_at', 'updated_at', 'deleted_at']);
 
-        // Filter by category
-        if ($request->has('category_id')) {
-            $query->where('category_id', $request->input('category_id'));
-        }
+            if ($request->filled('search')) {
+                $query->where('name', 'like', '%' . $request->input('search') . '%');
+            }
+            if ($request->filled('category_id')) {
+                $query->where('category_id', $request->input('category_id'));
+            }
+            if ($request->has('is_available')) {
+                $query->where('is_available', $request->boolean('is_available'));
+            }
+            if ($request->boolean('show_deleted')) {
+                $query->withTrashed();
+            }
 
-        // Filter by availability
-        if ($request->has('is_available')) {
-            $query->where('is_available', $request->boolean('is_available'));
-        }
+            return MenuItemResource::collection($query->paginate(15))->response()->getData(true);
+        });
 
-        if ($request->boolean('show_deleted')) {
-            $query->withTrashed();
-        }
-
-        $menuItems = $query->paginate(15);
-
-        return $this->success(
-            MenuItemResource::collection($menuItems)->response()->getData(true),
-            'Menu items retrieved successfully'
-        );
+        return $this->success($data, 'Menu items retrieved successfully');
     }
 
-    /**
-     * Store a newly created menu item.
-     */
     public function store(StoreMenuItemRequest $request): JsonResponse
     {
         $this->authorizePermission('manage_menu');
 
         $menuItem = MenuItem::create($request->validated());
+        Cache::increment("t:{$request->route('tenant')}:mi:ver");
 
         return $this->success(
             new MenuItemResource($menuItem->load('category')),
@@ -112,14 +106,13 @@ class MenuItemController extends Controller
         );
     }
 
-    /**
-     * Display the specified menu item.
-     */
     public function show($tenant, $id): JsonResponse
     {
         $this->authorizePermission('view_menu');
 
-        $menuItem = MenuItem::with('category')->findOrFail($id);
+        $menuItem = MenuItem::with('category')
+            ->select(['id', 'category_id', 'name', 'description', 'price', 'is_available', 'created_at', 'updated_at', 'deleted_at'])
+            ->findOrFail($id);
 
         return $this->success(
             new MenuItemResource($menuItem),
@@ -127,15 +120,13 @@ class MenuItemController extends Controller
         );
     }
 
-    /**
-     * Update the specified menu item in storage.
-     */
     public function update(UpdateMenuItemRequest $request, $tenant, $id): JsonResponse
     {
         $this->authorizePermission('manage_menu');
 
         $menuItem = MenuItem::findOrFail($id);
         $menuItem->update($request->validated());
+        Cache::increment("t:{$tenant}:mi:ver");
 
         return $this->success(
             new MenuItemResource($menuItem->load('category')),
@@ -143,19 +134,14 @@ class MenuItemController extends Controller
         );
     }
 
-    /**
-     * Remove the specified menu item from storage.
-     */
     public function destroy($tenant, $id): JsonResponse
     {
         $this->authorizePermission('manage_menu');
 
         $menuItem = MenuItem::findOrFail($id);
         $menuItem->delete();
+        Cache::increment("t:{$tenant}:mi:ver");
 
-        return $this->success(
-            null,
-            'Menu item deleted successfully'
-        );
+        return $this->success(null, 'Menu item deleted successfully');
     }
 }
