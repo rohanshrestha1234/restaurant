@@ -13,7 +13,7 @@ class RestaurantSpaceResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'is_active' => $this->is_active,
-            'table_count' => $this->tables_count ?? $this->tables()->count(),
+            'table_count' => $this->tables_count ?? 0,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
