@@ -92,9 +92,15 @@ class RestaurantTableController extends Controller
             return RestaurantTableResource::collection($query->paginate(15))->response()->getData(true);
         });
 
-        return $this->success($data, 'Restaurant tables retrieved successfully');
+        return $this->success(
+            $data, 
+            'Restaurant tables retrieved successfully'
+        );
     }
 
+    /**
+     * Store a newly created restaurant table.
+     */
     public function store(StoreRestaurantTableRequest $request): JsonResponse
     {
         $this->authorizePermission('manage_tables');
@@ -164,6 +170,9 @@ class RestaurantTableController extends Controller
         Cache::increment("t:{$tenant}:spaces:ver");
         Cache::forget("t:{$tenant}:table:show:{$id}");
 
-        return $this->success(null, 'Restaurant table deleted successfully');
+        return $this->success(
+            null,
+            'Restaurant table deleted successfully'
+        );
     }
 }

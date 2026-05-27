@@ -60,6 +60,9 @@ class MenuItemController extends Controller
         }
     }
 
+    /**
+     * Display a listing of menu items.
+     */
     public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('view_menu');
@@ -89,9 +92,15 @@ class MenuItemController extends Controller
             return MenuItemResource::collection($query->paginate(15))->response()->getData(true);
         });
 
-        return $this->success($data, 'Menu items retrieved successfully');
+        return $this->success(
+            $data, 
+            'Menu items retrieved successfully'
+        );
     }
 
+    /**
+     * Store a newly created menu item.
+     */
     public function store(StoreMenuItemRequest $request): JsonResponse
     {
         $this->authorizePermission('manage_menu');
@@ -106,6 +115,9 @@ class MenuItemController extends Controller
         );
     }
 
+    /**
+     * Display the specified menu item.
+     */
     public function show($tenant, $id): JsonResponse
     {
         $this->authorizePermission('view_menu');
@@ -123,6 +135,9 @@ class MenuItemController extends Controller
         );
     }
 
+    /**
+     * Update the specified menu item in storage.
+     */
     public function update(UpdateMenuItemRequest $request, $tenant, $id): JsonResponse
     {
         $this->authorizePermission('manage_menu');
@@ -138,6 +153,9 @@ class MenuItemController extends Controller
         );
     }
 
+    /**
+     * Remove the specified menu item from storage.
+     */
     public function destroy($tenant, $id): JsonResponse
     {
         $this->authorizePermission('manage_menu');
@@ -147,6 +165,9 @@ class MenuItemController extends Controller
         Cache::increment("t:{$tenant}:mi:ver");
         Cache::forget("t:{$tenant}:menu_item:show:{$id}");
 
-        return $this->success(null, 'Menu item deleted successfully');
+        return $this->success(
+            null,
+            'Menu item deleted successfully'
+        );
     }
 }

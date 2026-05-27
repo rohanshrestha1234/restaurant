@@ -60,6 +60,9 @@ class RestaurantSpaceController extends Controller
         }
     }
 
+    /**
+     * Display a listing of restaurant spaces.
+     */
     public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('view_tables');
@@ -83,9 +86,15 @@ class RestaurantSpaceController extends Controller
             return RestaurantSpaceResource::collection($query->paginate(15))->response()->getData(true);
         });
 
-        return $this->success($data, 'Restaurant spaces retrieved successfully');
+        return $this->success(
+            $data, 
+            'Restaurant spaces retrieved successfully'
+        );
     }
 
+    /**
+     * Store a newly created restaurant space.
+     */
     public function store(StoreRestaurantSpaceRequest $request): JsonResponse
     {
         $this->authorizePermission('manage_tables');
@@ -101,6 +110,9 @@ class RestaurantSpaceController extends Controller
         );
     }
 
+    /**
+     * Display the specified restaurant space.
+     */
     public function show($tenant, $id): JsonResponse
     {
         $this->authorizePermission('view_tables');
@@ -119,6 +131,9 @@ class RestaurantSpaceController extends Controller
         );
     }
 
+    /**
+     * Update the specified restaurant space in storage.
+     */
     public function update(UpdateRestaurantSpaceRequest $request, $tenant, $id): JsonResponse
     {
         $this->authorizePermission('manage_tables');
@@ -135,6 +150,9 @@ class RestaurantSpaceController extends Controller
         );
     }
 
+    /**
+     * Remove the specified restaurant space from storage.
+     */
     public function destroy($tenant, $id): JsonResponse
     {
         $this->authorizePermission('manage_tables');
@@ -144,6 +162,9 @@ class RestaurantSpaceController extends Controller
         Cache::increment("t:{$tenant}:spaces:ver");
         Cache::forget("t:{$tenant}:space:show:{$id}");
 
-        return $this->success(null, 'Restaurant space deleted successfully');
+        return $this->success(
+            null,
+            'Restaurant space deleted successfully'
+        );
     }
 }
