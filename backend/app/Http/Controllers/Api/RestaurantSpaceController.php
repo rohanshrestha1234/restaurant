@@ -69,7 +69,7 @@ class RestaurantSpaceController extends Controller
         $version  = Cache::get("t:{$tenantId}:spaces:ver", 0);
         $cacheKey = "t:{$tenantId}:spaces:v{$version}:" . md5(serialize($params));
 
-        $data = Cache::remember($cacheKey, 30, function () use ($request) {
+        $data = Cache::remember($cacheKey, 86400, function () use ($request) {
             $query = RestaurantSpace::select(['id', 'name', 'is_active', 'created_at', 'updated_at'])
                 ->withCount('tables');
 
@@ -105,12 +105,16 @@ class RestaurantSpaceController extends Controller
     {
         $this->authorizePermission('view_tables');
 
-        $space = RestaurantSpace::select(['id', 'name', 'is_active', 'created_at', 'updated_at'])
-            ->withCount('tables')
-            ->findOrFail($id);
+        $cacheKey = "t:{$tenant}:space:show:{$id}";
+        $data = Cache::remember($cacheKey, 86400, function () use ($tenant, $id) {
+            $space = RestaurantSpace::select(['id', 'name', 'is_active', 'created_at', 'updated_at'])
+                ->withCount('tables')
+                ->findOrFail($id);
+            return new RestaurantSpaceResource($space);
+        });
 
         return $this->success(
-            new RestaurantSpaceResource($space),
+            $data,
             'Restaurant space retrieved successfully'
         );
     }
@@ -123,6 +127,7 @@ class RestaurantSpaceController extends Controller
         $space->update($request->validated());
         $space->loadCount('tables');
         Cache::increment("t:{$tenant}:spaces:ver");
+        Cache::forget("t:{$tenant}:space:show:{$id}");
 
         return $this->success(
             new RestaurantSpaceResource($space),
@@ -137,6 +142,7 @@ class RestaurantSpaceController extends Controller
         $space = RestaurantSpace::findOrFail($id);
         $space->delete();
         Cache::increment("t:{$tenant}:spaces:ver");
+        Cache::forget("t:{$tenant}:space:show:{$id}");
 
         return $this->success(null, 'Restaurant space deleted successfully');
     }

@@ -60,15 +60,6 @@ class RestaurantTableController extends Controller
         }
     }
 
-    /** @return array{tenant: string, tables: string} */
-    private function cacheVersionKeys(string $tenantId): array
-    {
-        return [
-            'tenant' => "t:{$tenantId}:spaces:ver",
-            'tables' => "t:{$tenantId}:tables:ver",
-        ];
-    }
-
     /**
      * Display a listing of restaurant tables.
      */
@@ -84,7 +75,7 @@ class RestaurantTableController extends Controller
         $tvSpaces = Cache::get("t:{$tenantId}:spaces:ver", 0);
         $cacheKey = "t:{$tenantId}:tables:v{$tvTables}s{$tvSpaces}:" . md5(serialize($params));
 
-        $data = Cache::remember($cacheKey, 30, function () use ($request) {
+        $data = Cache::remember($cacheKey, 86400, function () use ($request) {
             $query = RestaurantTable::select(['id', 'restaurant_space_id', 'table_number', 'capacity', 'status', 'created_at', 'updated_at'])
                 ->with(['space' => fn ($q) => $q->select(['id', 'name', 'is_active', 'created_at', 'updated_at'])->withCount('tables')]);
 
@@ -127,12 +118,16 @@ class RestaurantTableController extends Controller
     {
         $this->authorizePermission('view_tables');
 
-        $table = RestaurantTable::select(['id', 'restaurant_space_id', 'table_number', 'capacity', 'status', 'created_at', 'updated_at'])
-            ->with(['space' => fn ($q) => $q->select(['id', 'name', 'is_active', 'created_at', 'updated_at'])->withCount('tables')])
-            ->findOrFail($id);
+        $cacheKey = "t:{$tenant}:table:show:{$id}";
+        $data = Cache::remember($cacheKey, 86400, function () use ($tenant, $id) {
+            $table = RestaurantTable::select(['id', 'restaurant_space_id', 'table_number', 'capacity', 'status', 'created_at', 'updated_at'])
+                ->with(['space' => fn ($q) => $q->select(['id', 'name', 'is_active', 'created_at', 'updated_at'])->withCount('tables')])
+                ->findOrFail($id);
+            return new RestaurantTableResource($table);
+        });
 
         return $this->success(
-            new RestaurantTableResource($table),
+            $data,
             'Restaurant table retrieved successfully'
         );
     }
@@ -147,6 +142,8 @@ class RestaurantTableController extends Controller
         $table = RestaurantTable::findOrFail($id);
         $table->update($request->validated());
         Cache::increment("t:{$tenant}:tables:ver");
+        Cache::increment("t:{$tenant}:spaces:ver"); 
+        Cache::forget("t:{$tenant}:table:show:{$id}");
 
         return $this->success(
             new RestaurantTableResource($table->load(['space' => fn ($q) => $q->withCount('tables')])),
@@ -165,6 +162,7 @@ class RestaurantTableController extends Controller
         $table->delete();
         Cache::increment("t:{$tenant}:tables:ver");
         Cache::increment("t:{$tenant}:spaces:ver");
+        Cache::forget("t:{$tenant}:table:show:{$id}");
 
         return $this->success(null, 'Restaurant table deleted successfully');
     }

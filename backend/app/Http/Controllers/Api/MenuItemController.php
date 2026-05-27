@@ -69,7 +69,7 @@ class MenuItemController extends Controller
         $version  = Cache::get("t:{$tenantId}:mi:ver", 0);
         $cacheKey = "t:{$tenantId}:mi:v{$version}:" . md5(serialize($params));
 
-        $data = Cache::remember($cacheKey, 30, function () use ($request) {
+        $data = Cache::remember($cacheKey, 86400, function () use ($request) {
             $query = MenuItem::with('category')
                 ->select(['id', 'category_id', 'name', 'description', 'price', 'is_available', 'created_at', 'updated_at', 'deleted_at']);
 
@@ -110,12 +110,15 @@ class MenuItemController extends Controller
     {
         $this->authorizePermission('view_menu');
 
-        $menuItem = MenuItem::with('category')
-            ->select(['id', 'category_id', 'name', 'description', 'price', 'is_available', 'created_at', 'updated_at', 'deleted_at'])
-            ->findOrFail($id);
-
+        $cacheKey = "t:{$tenant}:menu_item:show:{$id}";
+        $data = Cache::remember($cacheKey, 86400, function () use ($tenant, $id) {
+            $menuItem = MenuItem::with('category')
+                ->select(['id', 'category_id', 'name', 'description', 'price', 'is_available', 'created_at', 'updated_at', 'deleted_at'])
+                ->findOrFail($id);
+            return new MenuItemResource($menuItem);
+        });
         return $this->success(
-            new MenuItemResource($menuItem),
+            $data,
             'Menu item retrieved successfully'
         );
     }
@@ -127,6 +130,7 @@ class MenuItemController extends Controller
         $menuItem = MenuItem::findOrFail($id);
         $menuItem->update($request->validated());
         Cache::increment("t:{$tenant}:mi:ver");
+        Cache::forget("t:{$tenant}:menu_item:show:{$id}");
 
         return $this->success(
             new MenuItemResource($menuItem->load('category')),
@@ -141,6 +145,7 @@ class MenuItemController extends Controller
         $menuItem = MenuItem::findOrFail($id);
         $menuItem->delete();
         Cache::increment("t:{$tenant}:mi:ver");
+        Cache::forget("t:{$tenant}:menu_item:show:{$id}");
 
         return $this->success(null, 'Menu item deleted successfully');
     }
