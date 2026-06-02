@@ -68,18 +68,14 @@ class MenuItemController extends Controller
 
         $query = MenuItem::with('category');
 
-        // Search by name
-        if ($request->has('search')) {
-            $search = $request->input('search');
-            $query->where('name', 'like', "%{$search}%");
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->input('search') . '%');
         }
 
-        // Filter by category
-        if ($request->has('category_id')) {
-            $query->where('category_id', $request->input('category_id'));
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->integer('category_id'));
         }
 
-        // Filter by availability
         if ($request->has('is_available')) {
             $query->where('is_available', $request->boolean('is_available'));
         }
@@ -88,12 +84,26 @@ class MenuItemController extends Controller
             $query->withTrashed();
         }
 
-        $menuItems = $query->paginate(15);
+        $menuItems = $query->paginate(10);
 
-        return $this->success(
-            MenuItemResource::collection($menuItems)->response()->getData(true),
-            'Menu items retrieved successfully'
-        );
+        return $this->success([
+            'data'  => MenuItemResource::collection($menuItems)->resolve(),
+            'links' => [
+                'first' => $menuItems->url(1),
+                'last'  => $menuItems->url($menuItems->lastPage()),
+                'prev'  => $menuItems->previousPageUrl(),
+                'next'  => $menuItems->nextPageUrl(),
+            ],
+            'meta'  => [
+                'current_page' => $menuItems->currentPage(),
+                'from'         => $menuItems->firstItem(),
+                'last_page'    => $menuItems->lastPage(),
+                'path'         => $menuItems->path(),
+                'per_page'     => $menuItems->perPage(),
+                'to'           => $menuItems->lastItem(),
+                'total'        => $menuItems->total(),
+            ],
+        ], 'Menu items retrieved successfully');
     }
 
     /**
