@@ -66,16 +66,39 @@ class MenuItemController extends Controller
     {
         $this->authorizePermission('view_menu');
 
+        // Eager-load category upfront to prevent N+1 queries: without this,
+        // Laravel would fire a separate SELECT for each item's category when
+        // the resource serializes the relationship.
         $query = MenuItem::with('category');
 
+        // filled() guards against empty-string submissions (e.g. ?search=).
+        // has() would pass an empty value through and generate
+        // WHERE name ILIKE '%%', scanning the entire table uselessly.
         if ($request->filled('search')) {
-            $query->where('name', 'like', '%' . $request->input('search') . '%');
+            // ILIKE instead of LIKE: PostgreSQL's LIKE is case-sensitive, so
+            // "momo" would not match "Chicken Momo". ILIKE is case-insensitive.
+            // The btree index on `name` aids prefix searches; for heavy
+            // contains-style workloads on large tables a GIN/trigram index
+            // (pg_trgm) would be more effective.
+            $query->where('name', 'ilike', '%' . $request->input('search') . '%');
         }
 
+        // filled() used here for the same reason as search: category_id=''
+        // should be ignored, not cast to 0 and matched against uncategorised rows.
         if ($request->filled('category_id')) {
+            // integer() casts the value to int before binding, preventing
+            // non-numeric strings from reaching the query.
+            // Filtered via the dedicated btree index (menu_items_category_id_index),
+            // avoiding a full table scan.
             $query->where('category_id', $request->integer('category_id'));
         }
 
+        // has() is intentional here instead of filled(): false and "0" are valid
+        // filter values for a boolean column. filled() treats "0" as empty
+        // (PHP's empty("0") === true), so is_available=false would be silently
+        // ignored. has() only checks key presence, which is the correct guard.
+        // The composite index (deleted_at, is_available) covers this filter
+        // together with soft-delete, avoiding a full table scan.
         if ($request->has('is_available')) {
             $query->where('is_available', $request->boolean('is_available'));
         }
@@ -84,8 +107,15 @@ class MenuItemController extends Controller
             $query->withTrashed();
         }
 
+        // 10 per page instead of 15: smaller payload reduces serialisation time
+        // and bandwidth, which matters more than an extra 5 rows per request.
         $menuItems = $query->paginate(10);
 
+        // Explicit data/links/meta envelope instead of ->response()->getData(true):
+        // the old approach re-parsed the resource's HTTP response object just to
+        // extract the array, adding overhead and coupling the shape to the
+        // resource's internal response wrapper. Building the envelope manually
+        // gives a stable contract and uses the paginator helpers directly.
         return $this->success([
             'data'  => MenuItemResource::collection($menuItems)->resolve(),
             'links' => [
